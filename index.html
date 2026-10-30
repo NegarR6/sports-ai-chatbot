@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>آرنا | سامانه هوشمند رزرو مجموعه‌های ورزشی</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+    <style>
+        body {
+            font-family: 'Vazirmatn', sans-serif;
+            background-color: #050508;
+            color: #f4f4f5;
+            overflow: hidden;
+        }
+        /* بوم پس‌زمینه زنده (Interactive Canvas) */
+        #bgCanvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            z-index: 0;
+            pointer-events: none;
+        }
+        /* هاله نوری دنبال‌کننده موس (Live Cursor Spotlight) */
+        #cursorGlow {
+            position: fixed;
+            width: 380px; height: 380px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.14) 0%, rgba(16, 185, 129, 0.05) 45%, transparent 70%);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 1;
+            transition: width 0.2s, height 0.2s;
+        }
+        #cursorRing {
+            position: fixed;
+            width: 22px; height: 22px;
+            border: 1.5px solid rgba(129, 140, 248, 0.65);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 9999;
+            transition: width 0.18s ease, height 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+        }
+        #cursorRing.hover-active {
+            width: 38px; height: 38px;
+            border-color: rgba(52, 211, 153, 0.9);
+            background-color: rgba(16, 185, 129, 0.12);
+        }
+
+        .app-shell {
+            position: relative;
+            z-index: 10;
+            background: rgba(14, 14, 20, 0.78);
+            backdrop-filter: blur(28px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.85);
+        }
+        .court-card {
+            background: rgba(24, 24, 32, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .court-card:hover {
+            border-color: rgba(99, 102, 241, 0.55);
+            transform: translateY(-3px);
+            box-shadow: 0 14px 28px -10px rgba(99, 102, 241, 0.25);
+        }
+        .chat-scroll::-webkit-scrollbar { width: 5px; }
+        .chat-scroll::-webkit-scrollbar-track { background: transparent; }
+        .chat-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 10px; }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .msg-enter { animation: slideUp 0.25s ease-out forwards; }
+
+        .pulse-dot {
+            width: 6px; height: 6px;
+            background-color: #818cf8;
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulseAnim 1.4s infinite ease-in-out both;
+        }
+        .pulse-dot:nth-child(1) { animation-delay: -0.32s; }
+        .pulse-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes pulseAnim {
+            0%, 80%, 100% { transform: scale(0.4); opacity: 0.3; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="h-screen flex items-center justify-center p-2 sm:p-4 select-none">
+
+    <!-- پس‌زمینه زنده ذرات و شبکه نوری -->
+    <canvas id="bgCanvas"></canvas>
+    <!-- هاله و حلقه تعاملی موس -->
+    <div id="cursorGlow" class="hidden md:block"></div>
+    <div id="cursorRing" class="hidden md:block"></div>
+
+    <div class="w-full max-w-6xl h-[94vh] app-shell rounded-2xl flex overflow-hidden">
+        
+        <!-- سایدبار سمت راست -->
+        <aside class="hidden md:flex w-72 bg-zinc-950/65 border-l border-white/[0.06] flex-col justify-between p-5">
+            <div>
+                <!-- برندینگ آرنا -->
+                <div class="flex items-center gap-3.5 pb-5 border-b border-white/[0.06]">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-emerald-500 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-base text-white tracking-tight">آرنا | ARENA AI</h1>
+                        <div class="flex items-center gap-1.5 mt-0.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                            <span class="text-[11px] text-zinc-400">دستیار هوشمند رزرو ورزشی</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- دسته‌بندی سریع -->
+                <div class="mt-6">
+                    <p class="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-1">دسته‌بندی مجموعه‌ها</p>
+                    <div class="space-y-1.5">
+                        <button onclick="sendText('سالن فوتسال چی دارید؟')" class="interactive-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-zinc-900/70 hover:bg-indigo-500/15 hover:border-indigo-500/40 border border-white/[0.05] text-xs text-zinc-300 hover:text-white transition group">
+                            <span class="flex items-center gap-2.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 group-hover:scale-125 transition"></span>
+                                فوتسال و چمن مصنوعی
+                            </span>
+                            <span class="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">۳ سالن</span>
+                        </button>
+                        <button onclick="sendText('کورت پدل چی دارید؟')" class="interactive-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-zinc-900/70 hover:bg-indigo-500/15 hover:border-indigo-500/40 border border-white/[0.05] text-xs text-zinc-300 hover:text-white transition group">
+                            <span class="flex items-center gap-2.5">
+                                <span class="w-2 h-2 rounded-full bg-indigo-400 group-hover:scale-125 transition"></span>
+                                کورت‌های تخصصی پدل
+                            </span>
+                            <span class="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">۲ کورت</span>
+                        </button>
+                        <button onclick="sendText('زمین تنیس چی دارید؟')" class="interactive-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-zinc-900/70 hover:bg-indigo-500/15 hover:border-indigo-500/40 border border-white/[0.05] text-xs text-zinc-300 hover:text-white transition group">
+                            <span class="flex items-center gap-2.5">
+                                <span class="w-2 h-2 rounded-full bg-amber-400 group-hover:scale-125 transition"></span>
+                                زمین تنیس خاکی
+                            </span>
+                            <span class="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">۱ زمین</span>
+                        </button>
+                        <button onclick="sendText('سالن والیبال و بسکتبال چی دارید؟')" class="interactive-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-zinc-900/70 hover:bg-indigo-500/15 hover:border-indigo-500/40 border border-white/[0.05] text-xs text-zinc-300 hover:text-white transition group">
+                            <span class="flex items-center gap-2.5">
+                                <span class="w-2 h-2 rounded-full bg-sky-400 group-hover:scale-125 transition"></span>
+                                والیبال و بسکتبال
+                            </span>
+                            <span class="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">۲ سالن</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- مشخصات معماری سیستم -->
+                <div class="mt-6 bg-zinc-900/50 border border-white/[0.05] rounded-xl p-4 space-y-2.5">
+                    <div class="flex items-center gap-2 text-xs font-semibold text-indigo-400">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                        <span>معماری هسته آرنا</span>
+                    </div>
+                    <ul class="text-[11px] text-zinc-400 space-y-1.5 leading-relaxed">
+                        <li>• موتور Fast-Path (رزرو در ۰.۰۱ ثانیه)</li>
+                        <li>• استخراج ساختاریافته فیلترهای چندگانه</li>
+                        <li>• قفل همزمانی رزرو (Mutex Lock)</li>
+                        <li>• بازیابی مستندات قوانین (Policy RAG)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <button onclick="resetSession()" class="interactive-btn w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/[0.07] text-xs text-zinc-300 font-medium transition flex items-center justify-center gap-2">
+                <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <span>شروع نشست جدید</span>
+            </button>
+        </aside>
+
+        <!-- بخش اصلی چت -->
+        <main class="flex-1 flex flex-col bg-zinc-950/25">
+            
+            <!-- هدر بالا -->
+            <header class="px-6 py-4 bg-zinc-900/40 border-b border-white/[0.06] flex items-center justify-between">
+                <div>
+                    <h2 class="text-sm font-bold text-zinc-100">دستیار هوشمند رزرو مجموعه‌های ورزشی تهران</h2>
+                    <p class="text-[11px] text-zinc-400 mt-0.5">جستجوی طبیعی بر اساس رشته، محله، بودجه و امکانات</p>
+                </div>
+                <div class="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full">
+                    <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                    <span class="text-[11px] text-emerald-400 font-medium">Fast-Path & Lock: Active</span>
+                </div>
+            </header>
+
+            <!-- فضای اسکرول پیام‌ها -->
+            <div id="chatBox" class="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 chat-scroll select-text">
+                
+                <!-- پیام خوش‌آمدگویی اولیه -->
+                <div class="flex items-start gap-3.5 msg-enter">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center shrink-0 mt-0.5">
+                        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <div class="bg-zinc-900/90 border border-white/[0.07] text-zinc-200 rounded-2xl rounded-tr-sm px-5 py-4 text-sm leading-7 max-w-3xl shadow-sm">
+                        <p class="font-bold text-white mb-1">به سامانه هوشمند آرنا (ARENA AI) خوش آمدید.</p>
+                        برای پیدا کردن و رزرو سانس، کافیست رشته ورزشی، محدوده یا بودجه مورد نظر خود را بنویسید تا ظرفیت سالن‌ها به صورت لحظه‌ای بررسی و قفل شود.
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- نوار دکمه‌های پیشنهادی هوشمند -->
+            <div class="px-5 py-2.5 bg-zinc-900/50 border-t border-white/[0.05]">
+                <div class="flex items-center gap-2 overflow-x-auto no-scrollbar" id="quickReplies">
+                    <button onclick="sendText('یکشنبه سالن فوتسال غرب تهران زیر ۵۰۰ هزار تومان')" class="interactive-btn shrink-0 text-xs bg-zinc-800/80 hover:bg-indigo-600/20 hover:border-indigo-500/40 text-zinc-300 hover:text-indigo-200 border border-white/[0.07] px-3.5 py-2 rounded-xl transition">
+                        فوتسال غرب تهران زیر ۵۰۰ تومن
+                    </button>
+                    <button onclick="sendText('کورت پدل سرپوشیده در ولنجک که کافه داشته باشد')" class="interactive-btn shrink-0 text-xs bg-zinc-800/80 hover:bg-indigo-600/20 hover:border-indigo-500/40 text-zinc-300 hover:text-indigo-200 border border-white/[0.07] px-3.5 py-2 rounded-xl transition">
+                        پدل سرپوشیده ولنجک با کافه
+                    </button>
+                    <button onclick="sendText('یکشنبه سالن والیبال و پنجشنبه بسکتبال دارید؟')" class="interactive-btn shrink-0 text-xs bg-zinc-800/80 hover:bg-indigo-600/20 hover:border-indigo-500/40 text-zinc-300 hover:text-indigo-200 border border-white/[0.07] px-3.5 py-2 rounded-xl transition">
+                        جستجوی ترکیبی والیبال و بسکتبال
+                    </button>
+                    <button onclick="sendText('قوانین کنسلی و شرایط بارندگی چیست؟')" class="interactive-btn shrink-0 text-xs bg-zinc-800/80 hover:bg-indigo-600/20 hover:border-indigo-500/40 text-zinc-300 hover:text-indigo-200 border border-white/[0.07] px-3.5 py-2 rounded-xl transition">
+                        قوانین کنسلی و بارندگی
+                    </button>
+                </div>
+            </div>
+
+            <!-- فرم ورودی پیام -->
+            <form onsubmit="handleFormSubmit(event)" class="p-4 bg-zinc-900/80 border-t border-white/[0.06] flex gap-3 items-center">
+                <input id="messageInput" type="text" autocomplete="off"
+                    placeholder="درخواست خود را بنویسید (مثال: برای پنجشنبه سالن بسکتبال در شرق تهران می‌خواهم)..." 
+                    class="flex-1 bg-zinc-950 border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 transition">
+                <button id="sendBtn" type="submit" 
+                    class="interactive-btn bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold px-6 py-3 rounded-xl text-sm transition shadow-lg shadow-indigo-600/20 flex items-center gap-2">
+                    <span>ارسال</span>
+                    <svg class="w-4 h-4 rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                    </svg>
+                </button>
+            </form>
+        </main>
+    </div>
+
+    <script>
+        /* --- ۱. اسکریپت نشانگر موس زنده و پس‌زمینه ذرات نوری (Canvas) --- */
+        const cursorGlow = document.getElementById("cursorGlow");
+        const cursorRing = document.getElementById("cursorRing");
+        let mouseX = window.innerWidth / 2, mouseY = window.innerHeight / 2;
+
+        document.addEventListener("mousemove", (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            cursorGlow.style.left = mouseX + "px";
+            cursorGlow.style.top = mouseY + "px";
+            cursorRing.style.left = mouseX + "px";
+            cursorRing.style.top = mouseY + "px";
+
+            const isClickable = e.target.closest("button, a, input");
+            if (isClickable) {
+                cursorRing.classList.add("hover-active");
+            } else {
+                cursorRing.classList.remove("hover-active");
+            }
+        });
+
+        const canvas = document.getElementById("bgCanvas");
+        const ctx = canvas.getContext("2d");
+        let particles = [];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener("resize", resizeCanvas);
+        resizeCanvas();
+
+        for (let i = 0; i < 48; i++) {
+            particles.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                vx: (Math.random() - 0.5) * 0.45,
+                vy: (Math.random() - 0.5) * 0.45,
+                r: Math.random() * 1.8 + 0.7
+            });
+        }
+
+        function animateBg() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i < particles.length; i++) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+                if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(129, 140, 248, 0.35)";
+                ctx.fill();
+
+                // اتصال خطوط ظریف به موس و ذرات نزدیک
+                let dxMouse = p.x - mouseX;
+                let dyMouse = p.y - mouseY;
+                let distMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
+                if (distMouse < 150) {
+                    ctx.beginPath();
+                    ctx.moveTo(p.x, p.y);
+                    ctx.lineTo(mouseX, mouseY);
+                    ctx.strokeStyle = `rgba(52, 211, 153, ${0.22 * (1 - distMouse / 150)})`;
+                    ctx.lineWidth = 0.8;
+                    ctx.stroke();
+                }
+
+                for (let j = i + 1; j < particles.length; j++) {
+                    let p2 = particles[j];
+                    let dx = p.x - p2.x;
+                    let dy = p.y - p2.y;
+                    let dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 110) {
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.strokeStyle = `rgba(99, 102, 241, ${0.12 * (1 - dist / 110)})`;
+                        ctx.lineWidth = 0.6;
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(animateBg);
+        }
+        animateBg();
+
+        /* --- ۲. منطق اصلی چت‌بات و محافظت در برابر کلیک همزمان --- */
+        let sessionId = "user_" + Math.random().toString(36).substring(2, 9);
+        let isProcessing = false;
+        const chatBox = document.getElementById("chatBox");
+        const quickRepliesBox = document.getElementById("quickReplies");
+        const messageInput = document.getElementById("messageInput");
+        const sendBtn = document.getElementById("sendBtn");
+
+        const aiAvatarSvg = `
+            <div class="w-8 h-8 rounded-lg bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center shrink-0 mt-0.5">
+                <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+            </div>`;
+
+        function resetSession() {
+            sessionId = "user_" + Math.random().toString(36).substring(2, 9);
+            isProcessing = false;
+            chatBox.innerHTML = `
+                <div class="flex items-start gap-3.5 msg-enter">
+                    ${aiAvatarSvg}
+                    <div class="bg-zinc-900/90 border border-white/[0.07] text-zinc-200 rounded-2xl rounded-tr-sm px-5 py-3.5 text-sm leading-7">
+                        حافظه گفتگو بازنشانی شد. آماده دریافت درخواست جدید شما در سامانه آرنا هستم.
+                    </div>
+                </div>`;
+        }
+
+        function formatText(text) {
+            return text
+                .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>')
+                .replace(/\n/g, '<br>');
+        }
+
+        function appendUserMessage(text) {
+            const div = document.createElement("div");
+            div.className = "flex justify-end msg-enter";
+            div.innerHTML = `
+                <div class="bg-indigo-600 text-white rounded-2xl rounded-tl-sm px-5 py-3 text-sm max-w-[80%] shadow-md leading-relaxed">
+                    ${text}
+                </div>`;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function appendLoading() {
+            removeLoading(); // اطمینان از عدم وجود حباب قبلی
+            const div = document.createElement("div");
+            div.className = "loading-bubble flex items-start gap-3.5 msg-enter";
+            div.innerHTML = `
+                ${aiAvatarSvg}
+                <div class="bg-zinc-900/80 border border-white/[0.07] rounded-2xl rounded-tr-sm px-4 py-3.5 flex items-center gap-2">
+                    <span class="pulse-dot"></span>
+                    <span class="pulse-dot"></span>
+                    <span class="pulse-dot"></span>
+                    <span class="text-xs text-zinc-400 mr-1.5">در حال پردازش...</span>
+                </div>`;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function removeLoading() {
+            document.querySelectorAll(".loading-bubble").forEach(el => el.remove());
+        }
+
+        function renderCourtCards(courts, matchType) {
+            if (!courts || courts.length === 0) return "";
+            
+            const headerBadge = matchType === "alternative"
+                ? `<div class="mt-3 mb-1 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5">
+                    <span>پیشنهادهای جایگزین نزدیک به درخواست شما:</span>
+                   </div>`
+                : ``;
+
+            let html = `${headerBadge}<div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3 w-full">`;
+            courts.forEach(c => {
+                const indoorBadge = c.is_indoor 
+                    ? `<span class="text-[11px] bg-indigo-500/15 text-indigo-300 border border-indigo-500/25 px-2.5 py-0.5 rounded-md">سرپوشیده</span>`
+                    : `<span class="text-[11px] bg-amber-500/15 text-amber-300 border border-amber-500/25 px-2.5 py-0.5 rounded-md">روباز</span>`;
+                
+                const facilitiesBadges = c.facilities.map(f => 
+                    `<span class="text-[11px] bg-zinc-800/90 text-zinc-300 border border-white/[0.05] px-2 py-0.5 rounded">${f}</span>`
+                ).join("");
+
+                const slotsHtml = c.available_slots.map(s => 
+                    `<button onclick="sendText('رزرو ${c.name} برای ${s}')" 
+                        class="text-xs bg-emerald-500/10 hover:bg-emerald-500 text-emerald-300 hover:text-zinc-950 border border-emerald-500/30 px-3 py-1.5 rounded-lg transition font-medium flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span>${s}</span>
+                    </button>`
+                ).join("");
+
+                html += `
+                <div class="court-card rounded-xl p-4 flex flex-col justify-between">
+                    <div>
+                        <div class="flex justify-between items-start gap-2 mb-2.5">
+                            <div>
+                                <span class="text-[10px] text-indigo-400 font-semibold block mb-0.5">${c.sport_type}</span>
+                                <h3 class="font-bold text-white text-sm sm:text-base">${c.name}</h3>
+                            </div>
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                ${indoorBadge}
+                                <span class="text-[11px] bg-zinc-800 text-amber-400 border border-white/[0.06] px-2 py-0.5 rounded-md font-semibold">★ ${c.rating}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between text-xs text-zinc-400 mb-3 bg-zinc-950/60 px-3 py-2 rounded-lg border border-white/[0.04]">
+                            <span>${c.region}، <strong class="text-zinc-200">${c.neighborhood}</strong></span>
+                            <span class="text-emerald-400 font-bold">${c.price_per_hour.toLocaleString()} تومان <span class="text-[10px] font-normal text-zinc-500">/ ساعت</span></span>
+                        </div>
+
+                        <div class="flex flex-wrap gap-1.5 mb-3">
+                            ${facilitiesBadges}
+                        </div>
+                    </div>
+
+                    <div class="pt-3 border-t border-white/[0.06]">
+                        <p class="text-[11px] text-zinc-400 mb-2">انتخاب سانس جهت رزرو آنی:</p>
+                        <div class="flex flex-wrap gap-1.5">
+                            ${slotsHtml || '<span class="text-xs text-rose-400 font-medium">ظرفیت تمامی سانس‌ها تکمیل است</span>'}
+                        </div>
+                    </div>
+                </div>`;
+            });
+            html += `</div>`;
+            return html;
+        }
+
+        function renderInvoiceCard(inv) {
+            if (!inv) return "";
+            const isCancelled = inv.status === "CANCELLED";
+            const cardStyle = isCancelled 
+                ? "border-rose-500/40 bg-zinc-900/90" 
+                : "border-emerald-500/40 bg-zinc-900/90";
+            
+            const statusBadge = isCancelled 
+                ? `<span class="text-[11px] bg-rose-500/15 text-rose-300 border border-rose-500/30 px-2.5 py-0.5 rounded-md font-semibold">لغو شده (ظرفیت آزاد شد)</span>`
+                : `<span class="text-[11px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-2.5 py-0.5 rounded-md font-semibold">رزرو موقت - در انتظار پرداخت</span>`;
+
+            return `
+            <div class="mt-4 border ${cardStyle} rounded-xl p-4 text-xs space-y-3 max-w-xl shadow-lg">
+                <div class="flex justify-between items-center border-b border-white/[0.06] pb-3">
+                    <div>
+                        <span class="text-[10px] text-zinc-400 block">شناسه فاکتور رسمی آرنا</span>
+                        <span class="font-bold text-sm text-white tracking-wider font-mono">${inv.invoice_id}</span>
+                    </div>
+                    ${statusBadge}
+                </div>
+                <div class="grid grid-cols-2 gap-3 text-zinc-200 bg-zinc-950/60 p-3 rounded-lg border border-white/[0.04]">
+                    <div><span class="text-zinc-500 block text-[10px]">مجموعه ورزشی</span><strong>${inv.court_name}</strong></div>
+                    <div><span class="text-zinc-500 block text-[10px]">سانس انتخابی</span><strong class="text-emerald-400">${inv.reserved_slot}</strong></div>
+                    <div><span class="text-zinc-500 block text-[10px]">محله</span><strong>${inv.neighborhood}</strong></div>
+                    <div><span class="text-zinc-500 block text-[10px]">مبلغ قابل پرداخت</span><strong class="text-white">${inv.amount_toman.toLocaleString()} تومان</strong></div>
+                </div>
+                ${!isCancelled ? `
+                <div class="flex gap-2 pt-1">
+                    <a href="${inv.payment_url}" target="_blank" class="flex-1 text-center bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 rounded-lg transition">
+                        پرداخت آنلاین شاپرک
+                    </a>
+                    <button onclick="sendText('لغو رزرو فاکتور ${inv.invoice_id}')" class="bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/25 px-4 py-2.5 rounded-lg font-medium transition">
+                        لغو رزرو
+                    </button>
+                </div>` : ''}
+            </div>`;
+        }
+
+        function updateQuickReplies(buttons) {
+            if (!buttons || buttons.length === 0) return;
+            quickRepliesBox.innerHTML = buttons.map(b => `
+                <button onclick="sendText('${b}')" class="shrink-0 text-xs bg-zinc-800/80 hover:bg-indigo-600/20 hover:border-indigo-500/40 text-zinc-300 hover:text-indigo-200 border border-white/[0.07] px-3.5 py-2 rounded-xl transition">
+                    ${b}
+                </button>
+            `).join("");
+        }
+
+        async function sendText(text) {
+            if (!text.trim() || isProcessing) return;
+            isProcessing = true;
+            sendBtn.disabled = true;
+
+            appendUserMessage(text);
+            messageInput.value = "";
+            appendLoading();
+
+            try {
+                const res = await fetch("/api/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ session_id: sessionId, message: text })
+                });
+                const json = await res.json();
+                removeLoading();
+
+                if (res.ok && json.status === "success") {
+                    const d = json.data;
+                    const div = document.createElement("div");
+                    div.className = "flex items-start gap-3.5 msg-enter w-full";
+                    div.innerHTML = `
+                        ${aiAvatarSvg}
+                        <div class="bg-zinc-900/90 border border-white/[0.07] text-zinc-200 rounded-2xl rounded-tr-sm px-5 py-4 text-sm leading-7 shadow-sm flex-1 max-w-4xl">
+                            <div>${formatText(d.reply)}</div>
+                            ${renderCourtCards(d.matched_courts, d.match_type)}
+                            ${renderInvoiceCard(d.invoice)}
+                        </div>`;
+                    chatBox.appendChild(div);
+                    updateQuickReplies(d.quick_replies);
+                } else {
+                    throw new Error(json.detail || "خطای سرور");
+                }
+            } catch (err) {
+                removeLoading();
+                const errDiv = document.createElement("div");
+                errDiv.className = "flex items-start gap-3.5 msg-enter";
+                errDiv.innerHTML = `
+                    ${aiAvatarSvg}
+                    <div class="bg-rose-950/60 border border-rose-500/30 text-rose-200 rounded-2xl rounded-tr-sm px-5 py-3 text-xs">
+                        اختلال لحظه‌ای در شبکه رخ داد. لطفاً مجدداً کلیک کنید.
+                    </div>`;
+                chatBox.appendChild(errDiv);
+            } finally {
+                isProcessing = false;
+                sendBtn.disabled = false;
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+        }
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            sendText(messageInput.value);
+        }
+    </script>
+</body>
+</html>
